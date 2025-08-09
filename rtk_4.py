@@ -254,3 +254,4 @@ btn_exit.pack(pady=10)
 
 # Запуск главного цикла tkinter
 root.mainloop()
+
