@@ -1,257 +1,436 @@
 import tkinter as tk
-from tkinter import messagebox, simpledialog
+from tkinter import ttk, messagebox
+import csv
+import json
+import re
+from datetime import datetime
 import pandas as pd
-import os
-import datetime
-from datetime import timedelta
 import matplotlib.pyplot as plt
+import seaborn as sns
+import networkx as nx
+from tkinter import simpledialog
 
-# Путь к файлу данных
-DATA_FILE = 'data.xlsx'
+# ===================== Модели и файлы - без изменений =====================
+class Equipment:
+    def __init__(self, branch, imei, brand, model, status, condition, location, date_str):
+        self.branch = branch
+        self.imei = imei
+        self.brand = brand
+        self.model = model
+        self.status = status
+        self.condition = condition
+        self.location = location
+        try:
+            self.date = datetime.strptime(date_str, '%Y-%m-%d')
+        except:
+            self.date = None
 
-# --- Вспомогательные функции ---
-def check_warranty(date: datetime.date) -> bool:
-    today = datetime.date.today()
-    delta = today - date
-    return delta < timedelta(days=1095)
+    def to_dict(self):
+        return {
+            'branch': self.branch,
+            'imei': self.imei,
+            'brand': self.brand,
+            'model': self.model,
+            'status': self.status,
+            'condition': self.condition,
+            'location': self.location,
+            'date': self.date.strftime('%Y-%m-%d') if self.date else ''
+        }
 
-def add_new_object(branch: str, imei: int, device_type: str, model: str):
-    global main_dict, date_dict
-    date_nat = date_dict.get(imei, pd.NaT)  # Получаем дату из date_dict, если IMEI есть
-    if branch not in main_dict:
-        main_dict[branch] = {}
-    main_dict[branch][imei] = (device_type, model, 'исправен', 'установлен', date_nat)
-    date_dict[imei] = date_nat  # Обновляем date_dict
-    print(f"Объект IMEI {imei} добавлен в филиал {branch}. Дата: {date_nat}")
-    save_all()
+# ... (здесь остаются функции save/load, а также весь предыдущий GUI-код) ...
+def save_to_csv(data, filename='equipment_data.csv'):
+    try:
+        with open(filename, 'w', newline='', encoding='utf-8-sig') as f:
+            if not data:
+                return
+            writer = csv.DictWriter(f, fieldnames=data[0].to_dict().keys())
+            writer.writeheader()
+            for item in data:
+                writer.writerow(item.to_dict())
+    except Exception as e:
+        print(f"Ошибка при сохранении в CSV: {e}")
 
-def save_all():
-    global main_dict, wrong_dict, diag_dict, date_dict
-    df_main = dicts_to_df(main_dict)
-    df_wrong = dicts_to_df(wrong_dict)
-    df_diag = dicts_to_df(diag_dict)
-    df_dates = pd.DataFrame([{'IMEI': imei, 'Дата': date} for imei, date in date_dict.items()])
-    save_data(df_main, df_wrong, df_diag, df_dates)
+def load_from_csv(filename='equipment_data.csv'):
+    equipments = []
+    try:
+        with open(filename, 'r', encoding='utf-8-sig') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                equipments.append(Equipment(
+                    branch=row['branch'],
+                    imei=row['imei'],
+                    brand=row['brand'],
+                    model=row['model'],
+                    status=row['status'],
+                    condition=row['condition'],
+                    location=row['location'],
+                    date_str=row['date']
+                ))
+    except Exception as e:
+        print(f"Ошибка при чтении CSV: {e}")
+    return equipments
 
-def move_to_diagnostic(branch: str, imei: int):
-    global main_dict, diag_dict
-    if branch in main_dict and imei in main_dict[branch]:
-        info = main_dict[branch][imei]
-        date_value = info[4]
-        diag_dict[branch] = diag_dict.get(branch, {})
-        diag_dict[branch][imei] = (info[0], info[1], 'не исправен', 'диагностика', date_value)
-        del main_dict[branch][imei]
-        print(f"IMEI {imei} перемещен в диагностику.")
-        save_all()
+def save_to_json(data, filename='equipment_data.json'):
+    try:
+        with open(filename, 'w', encoding='utf-8') as f:
+            json.dump([item.to_dict() for item in data], f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        print(f"Ошибка при сохранении в JSON: {e}")
 
-def move_to_wrong(branch: str, imei: int):
-    global main_dict, wrong_dict
-    if branch in main_dict and imei in main_dict[branch]:
-        info = main_dict[branch][imei]
-        date_value = info[4]
-        wrong_dict[branch] = wrong_dict.get(branch, {})
-        wrong_dict[branch][imei] = (info[0], info[1], 'не исправен', 'склад', date_value)
-        del main_dict[branch][imei]
-        print(f"IMEI {imei} перемещен в не исправные объекты.")
-        save_all()
+def load_from_json(filename='equipment_data.json'):
+    equipments = []
+    try:
+        with open(filename, 'r', encoding='utf-8-sig') as f:
+            data_list = json.load(f)
+            for data in data_list:
+                equipments.append(Equipment(
+                    branch=data['branch'],
+                    imei=data['imei'],
+                    brand=data['brand'],
+                    model=data['model'],
+                    status=data['status'],
+                    condition=data['condition'],
+                    location=data['location'],
+                    date_str=data['date']
+                ))
+    except Exception as e:
+        print(f"Ошибка при чтении JSON: {e}")
+    return equipments
 
-def plot_status_distribution():
-    statuses = {'установлен': 0, 'склад': 0, 'диагностика': 0}
-    brand_statuses = {}
+# ===================== analysis.py: функции анализа и визуализации =====================
 
-    # Анализ статусов в основном списке
-    for branch, im_dict in main_dict.items():
-        for imei, info in im_dict.items():
-            status = info[3]
-            brand = info[0]
+def top_branches_defective(equipments, top_n=10):
+    """Выводит топ N филиалов по числу неисправных устройств."""
+    df = pd.DataFrame([eq.to_dict() for eq in equipments])
+    if df.empty or 'status' not in df:
+        messagebox.showinfo("Информация", "Нет данных для отображения.")
+        return
 
-            if status in statuses:
-                statuses[status] += 1
+    faulty_mask = df['status'].str.lower().str.contains('неисправен', na=False)
+    df_faulty = df[faulty_mask]
+    if df_faulty.empty:
+        messagebox.showinfo("Информация", "Нет неисправных устройств.")
+        return
 
-            if brand not in brand_statuses:
-                brand_statuses[brand] = {'установлен': 0, 'склад': 0, 'диагностика': 0}
-            brand_statuses[brand][status] += 1
+    result = df_faulty['branch'].value_counts().head(top_n)
 
-    # Анализ статусов в списке неправильных объектов
-    for branch, im_dict in wrong_dict.items():
-        for imei, info in im_dict.items():
-            status = info[3]
-            brand = info[0]
+    # Правильно: создаем фигуру и ось, и рисуем на ней
+    fig, ax = plt.subplots(figsize=(10, 6))
+    result.plot(kind='bar', color='red', ax=ax)
+    ax.set_title(f"Топ {top_n} филиалов по количеству неисправных устройств")
+    ax.set_ylabel("Количество")
+    fig.tight_layout()
+    plt.show()
+def dynamics_by_condition(equipments):
+    """Выводит количество устройств по брендам, начиная с 2024 года."""
+    df = pd.DataFrame([eq.to_dict() for eq in equipments])
+    if df.empty:
+        messagebox.showinfo("Информация", "Нет данных для отображения.")
+        return
 
-            if status in statuses:
-                statuses[status] += 1
+    df['date'] = pd.to_datetime(df['date'], errors='coerce')
+    start_date = pd.Timestamp('2000-01-01')
+    df_filtered = df[df['date'] >= start_date]
+    if df_filtered.empty:
+        messagebox.showinfo("Информация", "Нет данных начиная с 2024 года.")
+        return
 
-            if brand not in brand_statuses:
-                brand_statuses[brand] = {'установлен': 0, 'склад': 0, 'диагностика': 0}
-            brand_statuses[brand][status] += 1
+    counts = df_filtered.groupby(['brand', 'condition']).size().reset_index(name='count')
+    pivot_table = counts.pivot(index='brand', columns='condition', values='count').fillna(0)
 
-    # Анализ статусов в списке диагностики
-    for branch, im_dict in diag_dict.items():
-        for imei, info in im_dict.items():
-            status = info[3]
-            brand = info[0]
+    # Правильно: создаем фигуру и ось, и рисуем на ней
+    fig, ax = plt.subplots(figsize=(12, 8))
+    pivot_table.plot(kind='bar', stacked=True, colormap='tab20', ax=ax)
 
-            if status in statuses:
-                statuses[status] += 1
-
-            if brand not in brand_statuses:
-                brand_statuses[brand] = {'установлен': 0, 'склад': 0, 'диагностика': 0}
-            brand_statuses[brand][status] += 1
-
-    # Построение графиков для каждого бренда
-    for brand, status_count in brand_statuses.items():
-        labels = list(status_count.keys())
-        counts = list(status_count.values())
-
-        plt.figure()
-        plt.barh(labels, counts, color=['green', 'red', 'orange'])
-        plt.xlabel('Количество объектов')
-        plt.title(f'Распределение объектов по статусам для марки: {brand}')
-
-        # Добавление аннотаций
-        for index, value in enumerate(counts):
-            plt.annotate(f'{value}',
-                         xy=(value, index),
-                         ha='left',
-                         va='center',
-                         fontsize=15,
-                         color='black')
-
-        plt.show()
-
-    # Построение общего графика
-    labels = list(statuses.keys())
-    counts = list(statuses.values())
-
-    plt.figure()
-    plt.barh(labels, counts, color=['green', 'red', 'orange'])
-    plt.xlabel('Количество объектов')
-    plt.title('Общее распределение объектов по статусам')
-
-    # Добавление аннотаций
-    for index, value in enumerate(counts):
-        plt.annotate(f'{value}',
-                     xy=(value, index),
-                     ha='left',
-                     va='center',
-                     fontsize=20,
-                     color='red')
-
+    ax.set_title("Количество устройств по брендам")
+    ax.set_xlabel("Бренд")
+    ax.set_ylabel("Количество")
+    ax.legend(title='Состояние')
+    fig.tight_layout()
     plt.show()
 
-# Загрузка и сохранение данных
-def load_data():
-    if os.path.exists(DATA_FILE):
-        df_main = pd.read_excel(DATA_FILE, sheet_name='rtk_obgect')
-        df_wrong = pd.read_excel(DATA_FILE, sheet_name='rtk_obgect_wrong')
-        df_diag = pd.read_excel(DATA_FILE, sheet_name='rkr_obgect_diagnostic')
-        df_dates = pd.read_excel(DATA_FILE, sheet_name='date_dict')
+def sort_equipments_by(field, equipments):
+    """Сортирует список Equipment по заданному полю."""
+    if field == 'date':
+        return sorted(equipments, key=lambda eq: eq.date or datetime.min)
+    elif field == 'condition':
+        return sorted(equipments, key=lambda eq: eq.condition)
     else:
-        columns = ['Филиал', 'IMEI', 'Тип', 'Модель', 'Статус', 'Локация', 'Дата']
-        df_main = pd.DataFrame(columns=columns)
-        df_wrong = pd.DataFrame(columns=columns)
-        df_diag = pd.DataFrame(columns=columns)
-        df_dates = pd.DataFrame(columns=['IMEI', 'Дата'])
-    return df_main, df_wrong, df_diag, df_dates
+        return equipments
 
-def save_data(df_main, df_wrong, df_diag, df_dates):
-    with pd.ExcelWriter(DATA_FILE) as writer:
-        df_main.to_excel(writer, sheet_name='rtk_obgect', index=False)
-        df_wrong.to_excel(writer, sheet_name='rtk_obgect_wrong', index=False)
-        df_diag.to_excel(writer, sheet_name='rkr_obgect_diagnostic', index=False)
-        df_dates.to_excel(writer, sheet_name='date_dict', index=False)
+# ===================== Вспомогательные функции валидации =====================
 
-def df_to_dicts(df):
-    result = {}
-    for _, row in df.iterrows():
-        branch = row['Филиал']
-        imei = int(row['IMEI'])
-        date_value = row['Дата'].date() if isinstance(row['Дата'], pd.Timestamp) else row['Дата']
-        data_tuple = (row['Тип'], row['Модель'], row['Статус'], row['Локация'], date_value)
-        if branch not in result:
-            result[branch] = {}
-        result[branch][imei] = data_tuple
-    return result
+ALLOWED_STATUS = {'исправен', 'неисправен'}
+ALLOWED_CONDITION = {'установлен', 'диагностика', 'ремонт', 'демонтирован', 'неустановлен'}
+ALLOWED_LOCATION = {'склад', 'тс'}
 
-def dicts_to_df(data_dict):
-    rows = []
-    for branch, im_dict in data_dict.items():
-        for imei, data in im_dict.items():
-            row = {
-                'Филиал': branch,
-                'IMEI': imei,
-                'Тип': data[0],
-                'Модель': data[1],
-                'Статус': data[2],
-                'Локация': data[3],
-                'Дата': data[4]
-            }
-            rows.append(row)
-    return pd.DataFrame(rows)
+def normalize(s: str) -> str:
+    return (s or '').strip().lower()
 
-# Загрузка данных при старте
-df_main, df_wrong, df_diag, df_dates = load_data()
-main_dict = df_to_dicts(df_main)
-wrong_dict = df_to_dicts(df_wrong)
-diag_dict = df_to_dicts(df_diag)
-date_dict = dict(zip(df_dates['IMEI'], df_dates['Дата'].dt.date))
+def is_cyrillic_letters(s: str) -> bool:
+    # только кириллица без пробелов и знаков (включая букву ё)
+    return bool(re.fullmatch(r'[а-яё]+', s))
 
-# Главный GUI
-root = tk.Tk()
-root.title("Система управления IMEI")
+def is_digits(s: str) -> bool:
+    return bool(re.fullmatch(r'\d+', s))
 
-def input_client():
-    branch = simpledialog.askstring("Введите филиал", "Филиал:")
-    if branch is None:
-        return
-    if branch not in main_dict:
-        messagebox.showerror("Ошибка", "Такого филиала нет.")
-        return
+def validate_fields(d: dict):
+    """
+    d = {
+        'branch','imei','brand','model','status','condition','location','date'
+    }
+    Преобразует к нижнему регистру и проверяет ограничения.
+    Возвращает (ok, err_msg_or_none, normalized_dict)
+    """
+    out = {k: normalize(v) for k, v in d.items()}
 
-    imei_input = simpledialog.askstring("Введите IMEI", "IMEI:")
-    if imei_input is None:
-        return
+    # обязательные поля
+    required = ['branch', 'imei', 'brand', 'model', 'status', 'condition', 'location', 'date']
+    missing = [r for r in required if not out.get(r)]
+    if missing:
+        return False, f"Заполните поля: {', '.join(missing)}", None
 
+    # буквы (кириллица) для этих полей
+    for k in ['branch', 'brand', 'status', 'condition', 'location']:
+        if not is_cyrillic_letters(out[k]):
+            return False, f"Поле '{k}' должно содержать только буквы кириллицы без пробелов и знаков.", None
+
+    # цифры только
+    for k in ['imei', 'model']:
+        if not is_digits(out[k]):
+            return False, f"Поле '{k}' должно содержать только цифры.", None
+
+    # дополнительные проверки IMEI (если нужно ограничение длины)
+    if not (3 <= len(out['imei']) <= 15):
+        return False, "Длина IMEI должна быть от 3 до 15 цифр.", None
+
+    # перечислимые значения
+    if out['status'] not in ALLOWED_STATUS:
+        return False, f"Недопустимый статус. Разрешено: {', '.join(sorted(ALLOWED_STATUS))}.", None
+    if out['condition'] not in ALLOWED_CONDITION:
+        return False, f"Недопустимое состояние. Разрешено: {', '.join(sorted(ALLOWED_CONDITION))}.", None
+    if out['location'] not in ALLOWED_LOCATION:
+        return False, f"Недопустимое расположение. Разрешено: {', '.join(sorted(ALLOWED_LOCATION))}.", None
+
+    # дата формата YYYY-MM-DD
     try:
-        imei_num = int(imei_input)
-    except ValueError:
-        messagebox.showerror("Ошибка", "Некорректный формат IMEI.")
-        return
+        datetime.strptime(out['date'], '%Y-%m-%d')
+    except Exception:
+        return False, "Неверный формат даты. Используйте YYYY-MM-DD.", None
 
-    if imei_num not in main_dict.get(branch, {}):
-        if messagebox.askyesno("Добавить новый", f"IMEI {imei_num} не найден. Добавить новый объект?"):
-            device_type = simpledialog.askstring("Введите тип устройства", "Тип устройства:")
-            model = simpledialog.askstring("Введите модель устройства", "Модель устройства:")
-            add_new_object(branch, imei_num, device_type, model)
-            messagebox.showinfo("Успех", "Объект добавлен.")
-        return
+    return True, None, out
 
-    info = main_dict[branch][imei_num]
-    date_obj = info[4]  # уже datetime.date
-    warranty_status = check_warranty(date_obj)
-    messagebox.showinfo("Данные", str(info[:-1]) + "\nГарантия: " + ('не завершена' if warranty_status else 'завершена'))
+# ===================== Обновленный основной класс GUI =====================
 
-    action = simpledialog.askstring("Действие", 'Выберите действие - (диагностика / неисправен):')
-    if action == 'диагностика':
-        move_to_diagnostic(branch, imei_num)
-    elif action == 'неисправен':
-        move_to_wrong(branch, imei_num)
-    else:
-        messagebox.showerror("Ошибка", "Неверная команда.")
+class App:
+    def __init__(self, master):
+        self.master = master
+        master.title("Учет оборудования и анализ")
 
-def show_status_distribution():
-    plot_status_distribution()
+        self.equipments = load_from_json()
 
-# Кнопки для действий
-btn_input_client = tk.Button(root, text="Ввести филиал и IMEI", command=input_client)
-btn_input_client.pack(pady=10)
+        # Ввод для поиска
+        frame_input = ttk.Frame(master)
+        frame_input.pack(padx=10, pady=10)
 
-btn_show_distribution = tk.Button(root, text="Показать распределение IMEI по статусам", command=show_status_distribution)
-btn_show_distribution.pack(pady=10)
+        ttk.Label(frame_input, text="Филиал").grid(row=0, column=0, sticky='w')
+        self.entry_branch = ttk.Entry(frame_input)
+        self.entry_branch.grid(row=0, column=1)
 
-btn_exit = tk.Button(root, text="Выход", command=root.quit)
-btn_exit.pack(pady=10)
+        ttk.Label(frame_input, text="IMEI").grid(row=1, column=0, sticky='w')
+        self.entry_imei = ttk.Entry(frame_input)
+        self.entry_imei.grid(row=1, column=1)
 
-# Запуск главного цикла tkinter
-root.mainloop()
+        ttk.Button(frame_input, text="Поиск", command=self.search).grid(row=2, column=0, columnspan=2, pady=5)
+
+        # Результат
+        self.result_label = ttk.Label(master, text="", justify='left', background='white', relief='solid')
+        self.result_label.pack(padx=10, pady=10, fill='x')
+
+        # Добавление оборудования
+        ttk.Label(master, text="Добавить оборудование", font=('Arial', 12, 'bold')).pack(pady=10)
+        frame_add = ttk.Frame(master)
+        frame_add.pack(padx=10, pady=5)
+
+        # поля и подписи (ключ -> метка)
+        self.fields = [
+            ('branch', 'Филиал'),
+            ('imei', 'IMEI'),
+            ('brand', 'Марка'),
+            ('model', 'Модель'),
+            ('status', 'Статус (исправен/неисправен)'),
+            ('condition', 'Состояние (установлен/неустановлен/демонтирован/диагностика/ремонт)'),
+            ('location', 'Расположение (склад/тс)'),
+            ('date', 'Дата (YYYY-MM-DD)'),
+        ]
+        self.entries = {}
+        for i, (key, lbl) in enumerate(self.fields):
+            ttk.Label(frame_add, text=lbl).grid(row=i, column=0, sticky='w')
+            e = ttk.Entry(frame_add)
+            e.grid(row=i, column=1)
+            self.entries[key] = e
+
+        ttk.Button(frame_add, text="Добавить оборудование", command=self.add_equipment).grid(row=len(self.fields), column=0, columnspan=2, pady=5)
+
+        # Вызов анализа
+        frame_analysis = ttk.Frame(master)
+        frame_analysis.pack(pady=5)
+        ttk.Button(frame_analysis, text="ТОП 10 по неисправным", command=lambda: top_branches_defective(self.equipments)).grid(row=0, column=0, padx=5)
+        ttk.Button(frame_analysis, text="Динамика по состоянию", command=lambda: dynamics_by_condition(self.equipments)).grid(row=0, column=1, padx=5)
+        ttk.Button(frame_analysis, text="Сортировать по дате", command=lambda: self.sort_equipments('date')).grid(row=0, column=2, padx=5)
+        ttk.Button(frame_analysis, text="Сортировать по состоянию", command=lambda: self.sort_equipments('condition')).grid(row=0, column=3, padx=5)
+
+        # Сохранение/загрузка/выход
+        frame_buttons = ttk.Frame(master)
+        frame_buttons.pack(pady=5)
+        ttk.Button(frame_buttons, text="Сохранить в CSV", command=lambda: self.save_data('csv', show_msg=True)).grid(row=0, column=0, padx=5)
+        ttk.Button(frame_buttons, text="Сохранить в JSON", command=lambda: self.save_data('json', show_msg=True)).grid(row=0, column=1, padx=5)
+        ttk.Button(frame_buttons, text="Загрузить из CSV", command=self.load_csv).grid(row=0, column=2, padx=5)
+        ttk.Button(frame_buttons, text="Загрузить из JSON", command=self.load_json).grid(row=0, column=3, padx=5)
+        ttk.Button(frame_buttons, text="Выход", command=self.save_and_exit).grid(row=0, column=4, padx=5)
+
+        # Сохранение при закрытии окна (крестик)
+        self.master.protocol("WM_DELETE_WINDOW", self.save_and_exit)
+
+    def add_equipment(self):
+        # собрать данные
+        raw = {k: self.entries[k].get() for k, _ in self.fields}
+        ok, err, data = validate_fields(raw)
+        if not ok:
+            messagebox.showerror("Ошибка валидации", err)
+            return
+
+        # Проверка уникальности IMEI
+        if any(eq.imei == data['imei'] for eq in self.equipments):
+            messagebox.showerror("Ошибка", "Этот IMEI уже существует в базе.")
+            return
+
+        eq = Equipment(
+            branch=data['branch'],
+            imei=data['imei'],
+            brand=data['brand'],
+            model=data['model'],
+            status=data['status'],
+            condition=data['condition'],
+            location=data['location'],
+            date_str=data['date']
+        )
+        self.equipments.append(eq)
+
+        # Автосохранение JSON и CSV после добавления
+        self.autosave()
+
+        messagebox.showinfo("Удачно", "Оборудование добавлено.")
+        for e in self.entries.values():
+            e.delete(0, tk.END)
+
+    def autosave(self):
+        # Сохранение без всплывающих окон
+        save_to_json(self.equipments)
+        save_to_csv(self.equipments)
+
+    def save_data(self, fmt, show_msg=False):
+        if fmt == 'csv':
+            save_to_csv(self.equipments)
+        else:
+            save_to_json(self.equipments)
+        if show_msg:
+            messagebox.showinfo("Готово", f"Данные сохранены в {fmt.upper()}.")
+
+    def load_csv(self):
+        self.equipments = load_from_csv()
+        messagebox.showinfo("Готово", "Данные загружены из CSV.")
+
+    def load_json(self):
+        self.equipments = load_from_json()
+        messagebox.showinfo("Готово", "Данные загружены из JSON.")
+
+    def search(self):
+        branch_val = normalize(self.entry_branch.get())
+        imei_val = normalize(self.entry_imei.get())
+
+        if not branch_val or not imei_val:
+            messagebox.showerror("Ошибка", "Введите Филиал и IMEI")
+            return
+
+        selected_eq = None
+        for eq in self.equipments:
+            if eq.branch == branch_val and eq.imei == imei_val:
+                selected_eq = eq
+                break
+
+        if not selected_eq:
+            self.result_label.config(text="Объект не найден.")
+            return
+
+        today = datetime.now()
+        days_passed = (today - selected_eq.date).days if selected_eq.date else None
+        guarantee_status = ""
+        if days_passed is not None:
+            guarantee_status = "Гарантия завершена." if days_passed >= 1095 else "На гарантии."
+        else:
+            guarantee_status = "Дата неизвестна."
+
+        info_text = (
+            f"Филиал: {selected_eq.branch}\n"
+            f"IMEI: {selected_eq.imei}\n"
+            f"Марка: {selected_eq.brand}\n"
+            f"Модель: {selected_eq.model}\n"
+            f"Статус: {selected_eq.status}\n"
+            f"Состояние: {selected_eq.condition}\n"
+            f"Расположение: {selected_eq.location}\n"
+            f"Дата: {selected_eq.date.strftime('%Y-%m-%d') if selected_eq.date else 'неизвестна'}\n"
+            f"Статус гарантии: {guarantee_status}"
+        )
+
+        self.result_label.config(text=info_text)
+
+        response = messagebox.askquestion("Редактировать?", "Хотите внести изменения в Статус, Состояние или Расположение?")
+        if response == 'yes':
+            self.edit_fields(selected_eq)
+
+    def edit_fields(self, equipment_obj):
+        # Редактирование с валидацией и нормализацией (нижний регистр)
+        new_status = simpledialog.askstring("Редактировать", "Статус:", initialvalue=equipment_obj.status)
+        if new_status is not None:
+            ns = normalize(new_status)
+            if is_cyrillic_letters(ns) and ns in ALLOWED_STATUS:
+                equipment_obj.status = ns
+            else:
+                messagebox.showerror("Ошибка", f"Недопустимый статус. Разрешено: {', '.join(sorted(ALLOWED_STATUS))}.")
+
+        new_condition = simpledialog.askstring("Редактировать", "Состояние:", initialvalue=equipment_obj.condition)
+        if new_condition is not None:
+            nc = normalize(new_condition)
+            if is_cyrillic_letters(nc) and nc in ALLOWED_CONDITION:
+                equipment_obj.condition = nc
+            else:
+                messagebox.showerror("Ошибка", f"Недопустимое состояние. Разрешено: {', '.join(sorted(ALLOWED_CONDITION))}.")
+
+        new_location = simpledialog.askstring("Редактировать", "Расположение:", initialvalue=equipment_obj.location)
+        if new_location is not None:
+            nl = normalize(new_location)
+            if is_cyrillic_letters(nl) and nl in ALLOWED_LOCATION:
+                equipment_obj.location = nl
+            else:
+                messagebox.showerror("Ошибка", f"Недопустимое расположение. Разрешено: {', '.join(sorted(ALLOWED_LOCATION))}.")
+
+        # Автосохранение JSON и CSV после редактирования
+        self.autosave()
+        messagebox.showinfo("Обновлено", "Данные обновлены.")
+
+    def sort_equipments(self, field):
+        self.equipments = sort_equipments_by(field, self.equipments)
+        messagebox.showinfo("Готово", f"Отсортировано по {field}.")
+
+    def save_and_exit(self):
+        self.autosave()
+        self.master.destroy()
+
+# ===================== запуск =====================
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = App(root)
+    root.mainloop()
+
 
