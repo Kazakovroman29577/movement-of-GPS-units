@@ -52,6 +52,7 @@ equipment_data.csv — CSV база (UTF-8 BOM для Excel)
 Автосохранение в оба формата выполняется после добавления, редактирования и при выходе.  
   
 Интерфейс  
+  
 Поиск: «Филиал», «IMEI» → карточка устройства и статус гарантии.  
 Добавление: проверка форматов и уникальности IMEI.  
 Аналитика:  
@@ -74,20 +75,29 @@ equipment_data.csv — CSV база (UTF-8 BOM для Excel)
 └── README.md  
   
 Главный экран  
-<img width="623" height="492" alt="image" src="https://github.com/user-attachments/assets/e753cd5a-f855-4f57-a3f2-80cdf6d4a7a7" />  
+  
+<img width="615" height="709" alt="image" src="https://github.com/user-attachments/assets/347a8972-d36f-418e-be43-344409528da0" />  
+
   
 Поиск и карточка результата  
+  
 <img width="638" height="496" alt="image" src="https://github.com/user-attachments/assets/29fd050e-6120-477d-97c3-c8157edb9a73" />  
 <img width="603" height="608" alt="image" src="https://github.com/user-attachments/assets/238dd9f0-b88c-45b6-b2eb-f354af1d45a0" />  
   
 
 Диалоги редактирования статуса/состояния/расположения  
+  
 <img width="622" height="495" alt="image" src="https://github.com/user-attachments/assets/8b21d744-999a-4146-89bd-ec7d77470935" />  
 <img width="626" height="456" alt="image" src="https://github.com/user-attachments/assets/78054a8f-ba90-406b-b51d-f1c0889311ad" />  
   
 Редактирование полей  
-ТОП 10 по неисправны  
-Динамика по брендам и состояниям  
+ТОП 10 по неисправны   
+  
+<img width="1039" height="695" alt="image" src="https://github.com/user-attachments/assets/f4253bd2-9674-4c85-bc93-c3349c37a438" />  
+  
+Динамика по брендам и состояниям    
+
+<img width="1209" height="868" alt="image" src="https://github.com/user-attachments/assets/9c883efe-39cd-4a6b-8c41-7cb17b5adf04" />  
 
   
 Отчеты:   
