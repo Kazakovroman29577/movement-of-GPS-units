@@ -1,4 +1,3 @@
-import tkinter as tk
 from tkinter import ttk, messagebox
 import csv
 import json
@@ -6,9 +5,9 @@ import re
 from datetime import datetime
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
-import networkx as nx
 from tkinter import simpledialog
+import tkinter as tk
+from tkinter import PhotoImage
 
 # ===================== Модели и файлы - без изменений =====================
 class Equipment:
@@ -225,12 +224,36 @@ def validate_fields(d: dict):
 class App:
     def __init__(self, master):
         self.master = master
-        master.title("Учет оборудования и анализ")
+        self.master.title("Учет оборудования и анализ")
 
+        # Меню
+        self._build_menu()
+
+        # Данные
         self.equipments = load_from_json()
 
+        # Остальной интерфейс
+        self._build_ui()
+
+        # Сохранение при закрытии окна (крестик)
+        self.master.protocol("WM_DELETE_WINDOW", self.save_and_exit)
+
+    def _build_menu(self):
+        menubar = tk.Menu(self.master)
+        help_menu = tk.Menu(menubar, tearoff=0)
+        help_menu.add_command(label="О программе", command=self.show_about)
+        menubar.add_cascade(label="Справка", menu=help_menu)
+
+        sort_menu = tk.Menu(menubar, tearoff=0)
+        sort_menu.add_command(label="Сортировать по дате", command=lambda: self.sort_equipments('date'))
+        sort_menu.add_command(label="Сортировать по состоянию", command=lambda: self.sort_equipments('condition'))
+        menubar.add_cascade(label="Сортировка", menu=sort_menu)
+
+        self.master.config(menu=menubar)
+
+    def _build_ui(self):
         # Ввод для поиска
-        frame_input = ttk.Frame(master)
+        frame_input = ttk.Frame(self.master)
         frame_input.pack(padx=10, pady=10)
 
         ttk.Label(frame_input, text="Филиал").grid(row=0, column=0, sticky='w')
@@ -244,15 +267,14 @@ class App:
         ttk.Button(frame_input, text="Поиск", command=self.search).grid(row=2, column=0, columnspan=2, pady=5)
 
         # Результат
-        self.result_label = ttk.Label(master, text="", justify='left', background='white', relief='solid')
-        self.result_label.pack(padx=10, pady=10, fill='x')
+        self.result_label = ttk.Label(self.master, text="", justify='left', background='white', relief='solid')
+        self.result_label.pack(padx=50, pady=50, fill='x')
 
         # Добавление оборудования
-        ttk.Label(master, text="Добавить оборудование", font=('Arial', 12, 'bold')).pack(pady=10)
-        frame_add = ttk.Frame(master)
+        ttk.Label(self.master, text="Добавить оборудование", font=('Arial', 12, 'bold')).pack(pady=10)
+        frame_add = ttk.Frame(self.master)
         frame_add.pack(padx=10, pady=5)
 
-        # поля и подписи (ключ -> метка)
         self.fields = [
             ('branch', 'Филиал'),
             ('imei', 'IMEI'),
@@ -270,37 +292,121 @@ class App:
             e.grid(row=i, column=1)
             self.entries[key] = e
 
-        ttk.Button(frame_add, text="Добавить оборудование", command=self.add_equipment).grid(row=len(self.fields), column=0, columnspan=2, pady=5)
+        ttk.Button(frame_add, text="Добавить оборудование", command=self.add_equipment)\
+            .grid(row=len(self.fields), column=0, columnspan=2, pady=5)
 
-        # Вызов анализа
-        frame_analysis = ttk.Frame(master)
+        # Аналитика
+        frame_analysis = ttk.Frame(self.master)
         frame_analysis.pack(pady=5)
-        ttk.Button(frame_analysis, text="ТОП 10 по неисправным", command=lambda: top_branches_defective(self.equipments)).grid(row=0, column=0, padx=5)
-        ttk.Button(frame_analysis, text="Динамика по состоянию", command=lambda: dynamics_by_condition(self.equipments)).grid(row=0, column=1, padx=5)
-        ttk.Button(frame_analysis, text="Сортировать по дате", command=lambda: self.sort_equipments('date')).grid(row=0, column=2, padx=5)
-        ttk.Button(frame_analysis, text="Сортировать по состоянию", command=lambda: self.sort_equipments('condition')).grid(row=0, column=3, padx=5)
+        # ttk.Button(frame_analysis, text="ТОП 10 по неисправным",
+        #            command=lambda: top_branches_defective(self.equipments)).grid(row=0, column=0, padx=5)
+        self.top_icon = tk.PhotoImage(file="imgs/icons6.png")
+
+        # кнопка ТОП-10 с иконкой и текстом
+        top_btn = ttk.Button(
+            frame_analysis,
+            text="ТОП 10 по неисправным",
+            image=self.top_icon,
+            compound="top",  # размещение текста слева от изображения; можно 'right'
+            command=lambda: top_branches_defective(self.equipments)
+        )
+        top_btn.grid(row=0, column=0, padx=5)
+        # ttk.Button(frame_analysis, text="Динамика по состоянию",
+        #            command=lambda: dynamics_by_condition(self.equipments)).grid(row=0, column=1, padx=5)
+        self.din_icon = tk.PhotoImage(file="imgs/icons7.png")
+
+        # кнопка Динамика по состоянию с иконкой и текстом
+        din_btn = ttk.Button(
+            frame_analysis,
+            text="Динамика по состоянию",
+            image=self.din_icon,
+            compound="top",  # размещение текста слева от изображения; можно 'right'
+            command=lambda: dynamics_by_condition(self.equipments)
+        )
+        din_btn.grid(row=0, column=1, padx=5)
 
         # Сохранение/загрузка/выход
-        frame_buttons = ttk.Frame(master)
+        frame_buttons = ttk.Frame(self.master)
         frame_buttons.pack(pady=5)
-        ttk.Button(frame_buttons, text="Сохранить в CSV", command=lambda: self.save_data('csv', show_msg=True)).grid(row=0, column=0, padx=5)
-        ttk.Button(frame_buttons, text="Сохранить в JSON", command=lambda: self.save_data('json', show_msg=True)).grid(row=0, column=1, padx=5)
-        ttk.Button(frame_buttons, text="Загрузить из CSV", command=self.load_csv).grid(row=0, column=2, padx=5)
-        ttk.Button(frame_buttons, text="Загрузить из JSON", command=self.load_json).grid(row=0, column=3, padx=5)
-        ttk.Button(frame_buttons, text="Выход", command=self.save_and_exit).grid(row=0, column=4, padx=5)
+        # ttk.Button(frame_buttons, text="Сохранить в CSV",
+        #            command=lambda: self.save_data('csv', show_msg=True)).grid(row=0, column=0, padx=5)
+        self.save_csv_icon = tk.PhotoImage(file="imgs/icons4.png")
 
-        # Сохранение при закрытии окна (крестик)
-        self.master.protocol("WM_DELETE_WINDOW", self.save_and_exit)
+        # кнопка Сохранить в CSV с иконкой и текстом
+        save_csv_btn = ttk.Button(
+            frame_buttons,
+            text="Сохранить в CSV",
+            image=self.save_csv_icon,
+            compound="top",  # размещение текста слева от изображения; можно 'right'
+            command=lambda: self.save_data('csv', show_msg=True)
+        )
+        save_csv_btn.grid(row=0, column=0, padx=5)
+        # ttk.Button(frame_buttons, text="Сохранить в JSON",
+        #            command=lambda: self.save_data('json', show_msg=True)).grid(row=0, column=1, padx=5)
+        self.save_json_icon = tk.PhotoImage(file="imgs/icons5.png")
+
+        # кнопка Сохранить в JSON с иконкой и текстом
+        save_json_btn = ttk.Button(
+            frame_buttons,
+            text="Сохранить в JSON",
+            image=self.save_json_icon,
+            compound="top",  # размещение текста слева от изображения; можно 'right'
+            command=lambda: self.save_data('json', show_msg=True)
+        )
+        save_json_btn.grid(row=0, column=1, padx=5)
+        # ttk.Button(frame_buttons, text="Загрузить из CSV", command=self.load_csv).grid(row=0, column=2, padx=5)
+        self.load_csv_icon = tk.PhotoImage(file="imgs/icons2.png")
+
+        # кнопка Загрузить из CSV с иконкой и текстом
+        load_csv_btn = ttk.Button(
+            frame_buttons,
+            text="Загрузить из CSV",
+            image=self.load_csv_icon,
+            compound="top",  # размещение текста слева от изображения; можно 'right'
+            command=self.load_csv
+        )
+        load_csv_btn.grid(row=0, column=2, padx=5)
+        # ttk.Button(frame_buttons, text="Загрузить из JSON", command=self.load_json).grid(row=0, column=3, padx=5)
+        self.load_json_icon = tk.PhotoImage(file="imgs/icons3.png")
+
+        # кнопка Загрузить из JSON с иконкой и текстом
+        load_json_btn = ttk.Button(
+            frame_buttons,
+            text="Загрузить из JSON",
+            image=self.load_json_icon,
+            compound="top",  # размещение текста слева от изображения; можно 'right'
+            command=self.load_json
+        )
+        load_json_btn.grid(row=0, column=3, padx=5)
+        # ttk.Button(frame_buttons, text="Выход", command=self.save_and_exit).grid(row=0, column=4, padx=5)
+        self.exit_icon = tk.PhotoImage(file="imgs/icons8.png")
+
+        # кнопка Выход с иконкой и текстом
+        exit_btn = ttk.Button(
+            frame_buttons,
+            text="Выход",
+            image=self.exit_icon,
+            compound="left",  # размещение текста слева от изображения; можно 'right'
+            command=self.save_and_exit
+        )
+        exit_btn.grid(row=0, column=4, padx=5)
+
+
+
+
+    def show_about(self):
+        messagebox.showinfo(
+            "О программе",
+            "Учет оборудования и анализ\nВерсия: 1.0\nСортировка доступна в меню «Сортировка»."
+        )
 
     def add_equipment(self):
-        # собрать данные
         raw = {k: self.entries[k].get() for k, _ in self.fields}
         ok, err, data = validate_fields(raw)
         if not ok:
             messagebox.showerror("Ошибка валидации", err)
             return
 
-        # Проверка уникальности IMEI
         if any(eq.imei == data['imei'] for eq in self.equipments):
             messagebox.showerror("Ошибка", "Этот IMEI уже существует в базе.")
             return
@@ -316,16 +422,13 @@ class App:
             date_str=data['date']
         )
         self.equipments.append(eq)
-
-        # Автосохранение JSON и CSV после добавления
         self.autosave()
-
         messagebox.showinfo("Удачно", "Оборудование добавлено.")
+
         for e in self.entries.values():
             e.delete(0, tk.END)
 
     def autosave(self):
-        # Сохранение без всплывающих окон
         save_to_json(self.equipments)
         save_to_csv(self.equipments)
 
@@ -365,11 +468,9 @@ class App:
 
         today = datetime.now()
         days_passed = (today - selected_eq.date).days if selected_eq.date else None
-        guarantee_status = ""
+        guarantee_status = "Дата неизвестна."
         if days_passed is not None:
             guarantee_status = "Гарантия завершена." if days_passed >= 1095 else "На гарантии."
-        else:
-            guarantee_status = "Дата неизвестна."
 
         info_text = (
             f"Филиал: {selected_eq.branch}\n"
@@ -382,15 +483,12 @@ class App:
             f"Дата: {selected_eq.date.strftime('%Y-%m-%d') if selected_eq.date else 'неизвестна'}\n"
             f"Статус гарантии: {guarantee_status}"
         )
-
         self.result_label.config(text=info_text)
 
-        response = messagebox.askquestion("Редактировать?", "Хотите внести изменения в Статус, Состояние или Расположение?")
-        if response == 'yes':
+        if messagebox.askquestion("Редактировать?", "Хотите внести изменения в Статус, Состояние или Расположение?") == 'yes':
             self.edit_fields(selected_eq)
 
     def edit_fields(self, equipment_obj):
-        # Редактирование с валидацией и нормализацией (нижний регистр)
         new_status = simpledialog.askstring("Редактировать", "Статус:", initialvalue=equipment_obj.status)
         if new_status is not None:
             ns = normalize(new_status)
@@ -415,13 +513,13 @@ class App:
             else:
                 messagebox.showerror("Ошибка", f"Недопустимое расположение. Разрешено: {', '.join(sorted(ALLOWED_LOCATION))}.")
 
-        # Автосохранение JSON и CSV после редактирования
         self.autosave()
         messagebox.showinfo("Обновлено", "Данные обновлены.")
 
     def sort_equipments(self, field):
         self.equipments = sort_equipments_by(field, self.equipments)
-        messagebox.showinfo("Готово", f"Отсортировано по {field}.")
+        messagebox.showinfo("Готово", f"Отсортировано по {field}", icon='info')
+
 
     def save_and_exit(self):
         self.autosave()
@@ -432,5 +530,6 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = App(root)
     root.mainloop()
+
 
 
