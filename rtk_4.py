@@ -1,4 +1,3 @@
-import tkinter as tk
 from tkinter import ttk, messagebox
 import csv
 import json
@@ -7,10 +6,11 @@ from datetime import datetime
 import pandas as pd
 import matplotlib.pyplot as plt
 from tkinter import simpledialog
+import tkinter as tk
 from tkinter import PhotoImage
-'''
+import mplcursors
+
 # ===================== Модели и файлы - без изменений =====================
-'''
 class Equipment:
     def __init__(self, branch, imei, brand, model, status, condition, location, date_str):
         self.branch = branch
@@ -36,9 +36,8 @@ class Equipment:
             'location': self.location,
             'date': self.date.strftime('%Y-%m-%d') if self.date else ''
         }
-'''
+
 # ... (здесь остаются функции save/load, а также весь предыдущий GUI-код) ...
-'''
 def save_to_csv(data, filename='equipment_data.csv'):
     try:
         with open(filename, 'w', newline='', encoding='utf-8-sig') as f:
@@ -51,7 +50,7 @@ def save_to_csv(data, filename='equipment_data.csv'):
     except Exception as e:
         print(f"Ошибка при сохранении в CSV: {e}")
 
-def load_from_csv(filename='data_555.csv'):
+def load_from_csv(filename='equipment_data.csv'):
     equipments = []
     try:
         with open(filename, 'r', encoding='utf-8-sig') as f:
@@ -117,47 +116,56 @@ def top_branches_defective(equipments, top_n=10):
 
     # Правильно: создаем фигуру и ось, и рисуем на ней
     fig, ax = plt.subplots(figsize=(10, 6))
-    result.plot(linestyle='--', kind='bar', color='green', ax=ax)
+    result.plot(kind='bar', color='red', ax=ax)
     ax.set_title(f"Топ {top_n} филиалов по количеству неисправных устройств")
     ax.set_ylabel("Количество")
-    ax.set_xlabel("Филиалы")
     ax.grid(color='red', linestyle='--', linewidth='1')
     ax.grid(axis='x')
     fig.tight_layout()
-
-
     plt.show()
 def dynamics_by_condition(equipments):
-    """Выводит количество устройств по брендам, начиная с 20xx года (указанного в коде)."""
+    """Выводит количество устройств по брендам, начиная с 2024 года."""
     df = pd.DataFrame([eq.to_dict() for eq in equipments])
     if df.empty:
         messagebox.showinfo("Информация", "Нет данных для отображения.")
         return
 
     df['date'] = pd.to_datetime(df['date'], errors='coerce')
-    start_date = pd.Timestamp('2020-01-01')
+    start_date = pd.Timestamp('2000-01-01')
     df_filtered = df[df['date'] >= start_date]
     if df_filtered.empty:
-        messagebox.showinfo("Информация", "Нет данных начиная с 2020 года.")
+        messagebox.showinfo("Информация", "Нет данных начиная с 2024 года.")
         return
+
 
     counts = df_filtered.groupby(['brand', 'condition']).size().reset_index(name='count')
     pivot_table = counts.pivot(index='brand', columns='condition', values='count').fillna(0)
 
-    # Правильно: создаем фигуру и ось, и рисуем на ней
-    fig, ax = plt.subplots(figsize=(10, 8))
-    pivot_table.plot(kind='bar', stacked=True, colormap='tab20', ax=ax)
+    # Создаем фигуру и оси для двух графиков
+    fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(12, 8))
 
-    ax.set_title("Количество устройств по брендам")
-    ax.set_xlabel("Бренд")
-    ax.set_ylabel("Количество")
-    ax.legend(title='Состояние')
-    ax.grid(color='red', linestyle='--', linewidth='1')
-    ax.grid(axis='x')
+    # Столбчатая диаграмма
+    pivot_table.plot(kind='bar', stacked=True, colormap='tab20', ax=ax1)
+    ax1.set_title("Количество устройств по брендам")
+    ax1.set_xlabel("Бренд")
+    ax1.set_ylabel("Количество")
+    ax1.legend(title='Состояние')
+    ax1.grid(color='red', linestyle='--', linewidth='1')
+    ax1.grid(axis='x')
+
+    # Суммируем по брендам для круговой диаграммы
+    total_counts = pivot_table.sum(axis=1)
+
+    # Создаем круговую диаграмму на второй оси
+    explode = [0.1] * len(total_counts)  # Вытянуть все сегменты
+    ax2.pie(total_counts, labels=total_counts.index, autopct='%1.1f%%', startangle=120, explode=explode,
+            colors=plt.cm.tab20.colors)
+    ax2.set_title("Доля устройств по брендам")
+    plt.axis('equal')  # Убедимся, что круг правильной формы
+
+    # Улучшаем отображение
     fig.tight_layout()
     plt.show()
-
-    
 
 def sort_equipments_by(field, equipments):
     """Сортирует список Equipment по заданному полю."""
@@ -279,7 +287,7 @@ class App:
 
         # Результат
         self.result_label = ttk.Label(self.master, text="", justify='left', background='white', relief='solid')
-        self.result_label.pack(padx=10, pady=10, fill='x')
+        self.result_label.pack(padx=50, pady=50, fill='x')
 
         # Добавление оборудования
         ttk.Label(self.master, text="Добавить оборудование", font=('Arial', 12, 'bold')).pack(pady=10)
@@ -311,7 +319,7 @@ class App:
         frame_analysis.pack(pady=5)
         # ttk.Button(frame_analysis, text="ТОП 10 по неисправным",
         #            command=lambda: top_branches_defective(self.equipments)).grid(row=0, column=0, padx=5)
-        self.top_icon = tk.PhotoImage(file="icons6.png")
+        self.top_icon = tk.PhotoImage(file="imgs/icons6.png")
 
         # кнопка ТОП-10 с иконкой и текстом
         top_btn = ttk.Button(
@@ -324,7 +332,7 @@ class App:
         top_btn.grid(row=0, column=0, padx=5)
         # ttk.Button(frame_analysis, text="Динамика по состоянию",
         #            command=lambda: dynamics_by_condition(self.equipments)).grid(row=0, column=1, padx=5)
-        self.din_icon = tk.PhotoImage(file="icons7.png")
+        self.din_icon = tk.PhotoImage(file="imgs/icons7.png")
 
         # кнопка Динамика по состоянию с иконкой и текстом
         din_btn = ttk.Button(
@@ -390,7 +398,7 @@ class App:
         )
         load_json_btn.grid(row=0, column=3, padx=5)
         # ttk.Button(frame_buttons, text="Выход", command=self.save_and_exit).grid(row=0, column=4, padx=5)
-        self.exit_icon = tk.PhotoImage(file="icons8.png")
+        self.exit_icon = tk.PhotoImage(file="imgs/icons8.png")
 
         # кнопка Выход с иконкой и текстом
         exit_btn = ttk.Button(
@@ -541,6 +549,7 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = App(root)
     root.mainloop()
+
 
 
 
