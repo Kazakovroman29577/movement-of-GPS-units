@@ -124,7 +124,7 @@ def top_branches_defective(equipments, top_n=10):
     fig.tight_layout()
     plt.show()
 def dynamics_by_condition(equipments):
-    """Выводит количество устройств по брендам, начиная с 2024 года."""
+    """Выводит количество устройств по брендам, начиная с 2000 года."""
     df = pd.DataFrame([eq.to_dict() for eq in equipments])
     if df.empty:
         messagebox.showinfo("Информация", "Нет данных для отображения.")
@@ -134,7 +134,7 @@ def dynamics_by_condition(equipments):
     start_date = pd.Timestamp('2000-01-01')
     df_filtered = df[df['date'] >= start_date]
     if df_filtered.empty:
-        messagebox.showinfo("Информация", "Нет данных начиная с 2024 года.")
+        messagebox.showinfo("Информация", "Нет данных начиная с 2000 года.")
         return
 
 
@@ -549,6 +549,7 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = App(root)
     root.mainloop()
+
 
 
 
