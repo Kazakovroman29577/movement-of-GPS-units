@@ -7,8 +7,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from tkinter import simpledialog
 import tkinter as tk
-from tkinter import PhotoImage
-import mplcursors
+
 
 # ===================== Модели и файлы - без изменений =====================
 class Equipment:
@@ -275,9 +274,9 @@ class App:
         frame_input = ttk.Frame(self.master)
         frame_input.pack(padx=10, pady=10)
 
-        ttk.Label(frame_input, text="Филиал").grid(row=0, column=0, sticky='w')
-        self.entry_branch = ttk.Entry(frame_input)
-        self.entry_branch.grid(row=0, column=1)
+        # ttk.Label(frame_input, text="Филиал").grid(row=0, column=0, sticky='w')
+        # self.entry_branch = ttk.Entry(frame_input)
+        # self.entry_branch.grid(row=0, column=1)
 
         ttk.Label(frame_input, text="IMEI").grid(row=1, column=0, sticky='w')
         self.entry_imei = ttk.Entry(frame_input)
@@ -468,22 +467,34 @@ class App:
         messagebox.showinfo("Готово", "Данные загружены из JSON.")
 
     def search(self):
-        branch_val = normalize(self.entry_branch.get())
+        # branch_val = normalize(self.entry_branch.get())
         imei_val = normalize(self.entry_imei.get())
 
-        if not branch_val or not imei_val:
+        if not  imei_val:
             messagebox.showerror("Ошибка", "Введите Филиал и IMEI")
             return
+        # if not branch_val or not imei_val:
+        #     messagebox.showerror("Ошибка", "Введите Филиал и IMEI")
+        #     return
+
+        # Проверка на корректность ввода IMEI
+        if not imei_val.isdigit():
+            messagebox.showerror("Ошибка", "IMEI должен содержать только цифры")
+            return
+
 
         selected_eq = None
         for eq in self.equipments:
-            if eq.branch == branch_val and eq.imei == imei_val:
+            # if eq.branch == branch_val and eq.imei == imei_val:
+            if eq.imei == imei_val:
                 selected_eq = eq
                 break
 
         if not selected_eq:
             self.result_label.config(text="Объект не найден.")
             return
+
+
 
         today = datetime.now()
         days_passed = (today - selected_eq.date).days if selected_eq.date else None
@@ -549,6 +560,7 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = App(root)
     root.mainloop()
+
 
 
 
