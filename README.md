@@ -6,7 +6,7 @@
 Автосохранение в JSON и CSV.  
 Визуализация:  
 ТОП-N филиалов по количеству неисправных устройств.  
-Сложенная диаграмма по брендам и состоянию (с 2020-01-01).  
+Сложенная диаграмма по брендам и состоянию (с 2000-01-01).  
 Сортировка записей по дате или по состоянию.  
 Требования  
 Python 3.9+  
@@ -57,7 +57,7 @@ equipment_data.csv — CSV база (UTF-8 BOM для Excel)
 Добавление: проверка форматов и уникальности IMEI.  
 Аналитика:  
 ТОП 10 по неисправным — гистограмма по филиалам.  
-Динамика по состоянию — сложенная диаграмма по брендам с 2020-01-01.  
+Динамика по состоянию — сложенная диаграмма по брендам с 2000-01-01.  
 Сортировка: по дате и по состоянию.  
 Файлы: сохранить/загрузить JSON/CSV, выход с автосохранением.  
   
@@ -75,35 +75,78 @@ equipment_data.csv — CSV база (UTF-8 BOM для Excel)
 └── README.md  
   
 Главный экран  
+****************  
+
   
 <img width="615" height="709" alt="image" src="https://github.com/user-attachments/assets/347a8972-d36f-418e-be43-344409528da0" />  
 
   
 Поиск и карточка результата  
-  
-<img width="638" height="496" alt="image" src="https://github.com/user-attachments/assets/29fd050e-6120-477d-97c3-c8157edb9a73" />  
-<img width="603" height="608" alt="image" src="https://github.com/user-attachments/assets/238dd9f0-b88c-45b6-b2eb-f354af1d45a0" />  
-  
+****************************  
 
+  
+<img width="575" height="702" alt="image" src="https://github.com/user-attachments/assets/2069f40f-ea94-453d-9eca-18dc1a9fff42" />  
+
+<img width="580" height="830" alt="image" src="https://github.com/user-attachments/assets/04bf3ff1-82fa-44e3-b864-11b2465190ce" />
+
+
+************************************  
+  
 Диалоги редактирования статуса/состояния/расположения  
-  
-<img width="622" height="495" alt="image" src="https://github.com/user-attachments/assets/8b21d744-999a-4146-89bd-ec7d77470935" />  
-<img width="626" height="456" alt="image" src="https://github.com/user-attachments/assets/78054a8f-ba90-406b-b51d-f1c0889311ad" />  
-  
-Редактирование полей  
-ТОП 10 по неисправны   
-  
-<img width="1039" height="695" alt="image" src="https://github.com/user-attachments/assets/f4253bd2-9674-4c85-bc93-c3349c37a438" />  
-  
-Динамика по брендам и состояниям    
+*****************************************************  
 
-<img width="1209" height="868" alt="image" src="https://github.com/user-attachments/assets/9c883efe-39cd-4a6b-8c41-7cb17b5adf04" />  
+  
+<img width="584" height="708" alt="image" src="https://github.com/user-attachments/assets/42bcc179-5c01-4ace-883d-9fec44f69dca" />
+
+# Запрос на внесение изменений у объекта  
+*****************************************  
+
+  <img width="586" height="804" alt="image" src="https://github.com/user-attachments/assets/ad8ca98d-a01f-4c7d-b5a0-c992f3bff7a8" />  
+
+Редактирование полей  
+********************  
+
+Изменение статуса объекта  
+*************************  
+
+  <img width="583" height="811" alt="image" src="https://github.com/user-attachments/assets/59f03d1a-1c49-4c59-a196-893d9f8c8449" />  
+
+Изменение состояния объекта  
+****************************  
+
+  <img width="573" height="767" alt="image" src="https://github.com/user-attachments/assets/89466882-3ac3-4f50-b0c2-50932ba48ac7" />  
+
+Изменение расположения объекта  
+******************************  
+
+  <img width="585" height="816" alt="image" src="https://github.com/user-attachments/assets/5fc8fc8c-9063-4265-9a3c-11665537c55e" />  
+  
+Проверка корректности ввода  
+***************************  
+
+ <img width="578" height="685" alt="image" src="https://github.com/user-attachments/assets/48f5fd0b-cd8d-478a-9a10-11315b9f308b" />
+ 
+
+
+
+
+ТОП 10 по неисправным  
+*********************  
+
+<img width="1000" height="683" alt="image" src="https://github.com/user-attachments/assets/d4dcdd0d-0497-41bf-887c-d97bc37588a5" />  
+
+  
+
+Динамика по брендам и состояниям    
+********************************  
+  
+<img width="1200" height="880" alt="image" src="https://github.com/user-attachments/assets/01e57509-f287-46b7-b28f-2776c1f22fc3" />  
 
   
 Отчеты:   
 ТОП филиалов по неисправным:  
 Фильтр: status содержит «неисправен» (без учета регистра).  
 Результат: столбчатая диаграмма top-10.  
-По брендам и состояниям (с 2020-01-01):  
+По брендам и состояниям (с 2000-01-01):  
 Парсинг даты с errors='coerce'.  
 Группировка по ['brand', 'condition'] и построение сложенной диаграммы.  
